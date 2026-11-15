@@ -1,4 +1,25 @@
+{
+	# The admin API is not needed and would allow anything inside the
+	# container to reconfigure the proxy
+	admin off
+}
+
+(security_headers) {
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		# Only set if the backend didn't send its own CSP (e.g. "sandbox" for file previews)
+		?Content-Security-Policy "frame-ancestors 'self'"
+		-Server
+		-X-Powered-By
+	}
+}
+
 :3000 {
+	import security_headers
+
 	# Reverse proxy for /api
 	reverse_proxy /api/* http://localhost:{$BACKEND_PORT:8080} {
 		trusted_proxies 0.0.0.0/0

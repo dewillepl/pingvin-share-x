@@ -68,6 +68,7 @@ async function bootstrap() {
     })(req, res, next);
   });
 
+  app.disable("x-powered-by");
   app.use(cookieParser());
   app.set("trust proxy", parseTrustProxy(process.env.TRUST_PROXY));
 
