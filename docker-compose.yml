@@ -1,16 +1,29 @@
+# Pingvin Share X built from this repository.
+#
+#   docker build -t pingvin-share-x:latest .
+#   docker compose up -d
+#
+# (or just "docker compose up -d --build"). The app listens on port 3000.
+# For a setup behind a reverse proxy without published ports, see deploy/.
+
 services:
   pingvin-share-x:
+    build: .
+    image: ${PINGVIN_IMAGE:-pingvin-share-x:latest}
     container_name: pingvin-share-x
-    image: smp46/pingvin-share-x # or ghcr.io/smp46/pingvin-share-x
     restart: unless-stopped
     ports:
       - 3000:3000
     environment:
-      - TRUST_PROXY=false # Set to true if a reverse proxy is in front of the container
+      - TRUST_PROXY=false # See README: use a hop count (e.g. 2) behind a reverse proxy, never "true"
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
     volumes:
       - "./data:/opt/app/backend/data:rw,z"
       - "./data/images:/opt/app/frontend/public/img:rw,z"
-  #      - "./config.yaml:/opt/app/config.yaml" # Add this line, if you want to configure pingvin-share-x via config file and not via UI
+    #  - "./config.yaml:/opt/app/config.yaml:ro,z" # Configure via config file instead of the admin UI
+    security_opt:
+      - no-new-privileges:true
 
   # To add ClamAV, to scan your shares for malicious files,
   # see https://smp46.github.io/pingvin-share-x/setup/integrations/#clamav-docker-only

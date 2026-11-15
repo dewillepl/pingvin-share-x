@@ -32,33 +32,37 @@ This repository is a fork of [smp46/pingvin-share-x](https://github.com/smp46/pi
 
 ## Quick start (build from source)
 
+No prebuilt image is used: [`docker-compose.yml`](docker-compose.yml) runs the image you build from this repository.
+
 ```bash
-git clone https://github.com/dewillepl/pingvin-share-x.git
+git clone https://github.com/dewillepl/pingvin-share-x.git && cd pingvin-share-x
 ```
 
 ```bash
-cd pingvin-share-x && docker compose -f docker-compose.local.yml up -d --build
-```
-
-Open `http://localhost:3001`. The **first account you register becomes the admin**. Data (SQLite database, uploads, logo) is stored in `./data`.
-
-This setup publishes the port directly and is meant for testing or a LAN. For anything reachable from the internet, use the reverse proxy setup below.
-
-## Building the image manually
-
-```bash
-docker build -t pingvin-share-x:local .
+docker build -t pingvin-share-x:latest .
 ```
 
 ```bash
-docker run -d --name pingvin-share-x -p 3000:3000 -e PUID=$(id -u) -e PGID=$(id -g) -v "$PWD/data:/opt/app/backend/data" -v "$PWD/data/images:/opt/app/frontend/public/img" pingvin-share-x:local
+docker compose up -d
 ```
 
-The container starts as root only to fix file ownership, then runs as `PUID:PGID`. Inside the container, the bundled Caddy listens on port `3000` and forwards requests to the frontend and to the backend (`/api`).
+Open `http://localhost:3000`. The **first account you register becomes the admin**. Data (SQLite database, uploads, logo) is stored in `./data`.
+
+Notes:
+- `docker compose up -d --build` builds and starts in one step.
+- To use a different tag, build with `docker build -t <tag> .` and set `PINGVIN_IMAGE=<tag>` in a `.env` file next to `docker-compose.yml`.
+- `PUID`/`PGID` (default `1000`) can be set the same way. They should match the owner of `./data`.
+- The container starts as root only to fix file ownership, then runs as `PUID:PGID`. Inside the container, the bundled Caddy listens on port `3000` and forwards requests to the frontend and to the backend (`/api`).
+
+This setup publishes port 3000 directly and is meant for testing or a LAN. For anything reachable from the internet, use the reverse proxy setup below.
 
 ## Running behind a reverse proxy (recommended for production)
 
-[`deploy/docker-compose.yml`](deploy/docker-compose.yml) builds the image from this repository and publishes **no ports**. Your reverse proxy (e.g. Nginx Proxy Manager, Traefik or nginx in Docker) reaches the container over a shared Docker network.
+[`deploy/docker-compose.yml`](deploy/docker-compose.yml) uses the same image and publishes **no ports**. Your reverse proxy (e.g. Nginx Proxy Manager, Traefik or nginx in Docker) reaches the container over a shared Docker network.
+
+```bash
+docker build -t pingvin-share-x:latest .
+```
 
 ```bash
 cd deploy && cp .env.example .env
@@ -71,7 +75,7 @@ Fill in `.env`:
 - optionally `NODE_EXTRA_CA_CERTS`, for LDAPS with a private CA (put the PEM file into `deploy/certs/`)
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
 Then point your reverse proxy to `http://pingvin-share-x:3000` and enable TLS and HSTS there.
@@ -119,10 +123,14 @@ All other options are described in the upstream documentation: <https://smp46.gi
 Back up the data directory first. Database migrations run automatically on start and can't be rolled back.
 
 ```bash
-git pull && docker compose -f docker-compose.local.yml up -d --build
+git pull && docker build -t pingvin-share-x:latest .
 ```
 
-When using the reverse proxy setup, run `docker compose up -d --build` in `deploy/` instead.
+```bash
+docker compose up -d
+```
+
+When using the reverse proxy setup, run `docker compose up -d` in `deploy/`. Compose recreates the container with the new image.
 
 ## Development
 

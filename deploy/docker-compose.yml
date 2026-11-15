@@ -9,7 +9,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    image: pingvin-share-x:local
+    image: ${PINGVIN_IMAGE:-pingvin-share-x:latest}
     container_name: pingvin-share-x
     restart: unless-stopped
     # No "ports:" on purpose. Only the reverse proxy reaches the app through
