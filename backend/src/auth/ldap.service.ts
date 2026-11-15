@@ -33,6 +33,7 @@ export class LdapService {
           this.serviceConfig.get("ldap.bindPassword"),
         );
       } catch (error) {
+        await this.closeConnection(ldapClient);
         this.logger.warn(
           this.i18n.t("ldap.defaultUserBindFailed", {
             args: { error: String(error) },
@@ -43,6 +44,14 @@ export class LdapService {
     }
 
     return ldapClient;
+  }
+
+  private async closeConnection(ldapClient: Client) {
+    try {
+      await ldapClient.unbind();
+    } catch {
+      // Connection is already closed or broken, nothing left to clean up
+    }
   }
 
   public async authenticateUser(
@@ -129,6 +138,8 @@ export class LdapService {
         }),
       );
       return null;
+    } finally {
+      await this.closeConnection(ldapClient);
     }
   }
 }
