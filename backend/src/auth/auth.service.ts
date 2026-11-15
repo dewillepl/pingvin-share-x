@@ -2,6 +2,8 @@ import {
   BadRequestException,
   ForbiddenException,
   forwardRef,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   Logger,
@@ -23,6 +25,7 @@ import { UserSevice } from "../user/user.service";
 import { AuthRegisterDTO } from "./dto/authRegister.dto";
 import { AuthSignInDTO } from "./dto/authSignIn.dto";
 import { LdapService } from "./ldap.service";
+import { LoginAttemptService } from "./loginAttempt.service";
 
 @Injectable()
 export class AuthService {
@@ -32,6 +35,7 @@ export class AuthService {
     private config: ConfigService,
     private emailService: EmailService,
     private ldapService: LdapService,
+    private loginAttemptService: LoginAttemptService,
     private userService: UserSevice,
     @Inject(forwardRef(() => OAuthService)) private oAuthService: OAuthService,
     private readonly i18n: I18nService,
@@ -121,6 +125,17 @@ export class AuthService {
       );
     }
 
+    const identifier = dto.username || dto.email;
+    if (this.loginAttemptService.isLocked(identifier)) {
+      this.logger.warn(
+        `Blocked login attempt for user ${identifier} from IP ${ip}: too many failed attempts`,
+      );
+      throw new HttpException(
+        this.i18n.t("auth.tooManyFailedAttempts"),
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     if (!this.config.get("oauth.disablePassword")) {
       const email = dto.email?.toLowerCase().trim();
       const user = await this.prisma.user.findFirst({
@@ -138,6 +153,7 @@ export class AuthService {
         this.logger.log(
           `Successful password login for user ${user.email} from IP ${ip}`,
         );
+        this.loginAttemptService.reset(identifier);
         return this.generateToken(user);
       }
     }
@@ -160,10 +176,12 @@ export class AuthService {
         this.logger.log(
           `Successful LDAP login for user ${ldapUsername} (${user.id}) from IP ${ip}`,
         );
+        this.loginAttemptService.reset(identifier);
         return this.generateToken(user);
       }
     }
 
+    this.loginAttemptService.registerFailure(identifier);
     this.logger.log(
       `Failed login attempt for user ${dto.email || dto.username} from IP ${ip}`,
     );

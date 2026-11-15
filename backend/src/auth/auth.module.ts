@@ -6,6 +6,7 @@ import { AuthService } from "./auth.service";
 import { AuthTotpService } from "./authTotp.service";
 import { JwtStrategy } from "./strategy/jwt.strategy";
 import { LdapService } from "./ldap.service";
+import { LoginAttemptService } from "./loginAttempt.service";
 import { UserModule } from "../user/user.module";
 import { OAuthModule } from "../oauth/oauth.module";
 
@@ -19,7 +20,13 @@ import { OAuthModule } from "../oauth/oauth.module";
     UserModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, AuthTotpService, JwtStrategy, LdapService],
+  providers: [
+    AuthService,
+    AuthTotpService,
+    JwtStrategy,
+    LdapService,
+    LoginAttemptService,
+  ],
   exports: [AuthService],
 })
 export class AuthModule {}
