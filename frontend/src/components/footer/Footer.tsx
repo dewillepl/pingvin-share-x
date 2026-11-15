@@ -30,7 +30,7 @@ const Footer = () => {
           {t("footer.poweredBy")}{" "}
           <Anchor
             size="xs"
-            href="https://github.com/smp46/pingvin-share-x"
+            href="https://github.com/dewillepl/pingvin-share-x"
             target="_blank"
           >
             Pingvin Share X
@@ -44,7 +44,7 @@ const Footer = () => {
             {t("footer.poweredBy")}{" "}
             <Anchor
               size="xs"
-              href="https://github.com/smp46/pingvin-share-x"
+              href="https://github.com/dewillepl/pingvin-share-x"
               target="_blank"
             >
               Pingvin Share X
