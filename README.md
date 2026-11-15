@@ -1,143 +1,163 @@
-<div align="center">
-  <img src="https://github.com/user-attachments/assets/b5bc0c1e-5641-4106-b322-a1b0f5448b0f" width="60"/>
-  
-  <h1>Pingvin Share X</h1>
+# Pingvin Share X – security-hardened fork
 
-  <p align="center">
+A self-hosted file sharing platform and a simple alternative to WeTransfer.
 
-![GitHub Release](https://img.shields.io/github/v/release/smp46/pingvin-share-x) [![Crowdin](https://badges.crowdin.net/pingvin-share-x/localized.svg)](https://crowdin.com/project/pingvin-share-x) ![Docker Pulls](https://img.shields.io/docker/pulls/smp46/pingvin-share-x) [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-%40smp46-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/smp46)
-
-  </p>
-</div>
-
-
-Pingvin Share X is a fork of [Pingvin Share](https://github.com/stonith404/pingvin-share), a self-hosted file sharing platform and an alternative for WeTransfer.
+This repository is a fork of [smp46/pingvin-share-x](https://github.com/smp46/pingvin-share-x), which is itself a fork of the now archived [stonith404/pingvin-share](https://github.com/stonith404/pingvin-share). It follows upstream `main` closely and adds a small set of security fixes and a deployment compose on top. It is **not** an official release channel of Pingvin Share X and no prebuilt images are published, so you build the image yourself from this repository.
 
 ## Features
 
-- Share files using a link
-- Unlimited file size (restricted only by disk space)
-- Set an expiration date for shares
-- Secure shares with visitor limits and passwords
-- Email recipients
-- Reverse shares
-- OIDC and LDAP authentication
-- Integration with ClamAV for security scans
-- Different file providers: local storage and S3
+- Share files via a link, with no file size limit other than disk space
+- Expiration dates, visitor limits and passwords for shares
+- Reverse shares, so others can upload files to you
+- Email recipients and download notifications
+- Local accounts, LDAP/Active Directory, OIDC/OAuth2 and TOTP
+- Optional ClamAV scanning, local storage or S3
+- Admin panel for configuration, users and appearance (colours, logo, custom CSS)
 
-## Setup
+## What this fork changes
 
-### Installation with Docker (recommended)
+| Change | Why |
+|---|---|
+| `TRUST_PROXY` accepts a hop count or a subnet list | With `true`, clients could spoof their IP through `X-Forwarded-For` and bypass rate limiting |
+| Per-account limit on failed sign-ins (5 attempts in 15 minutes, local and LDAP accounts) | Limits password spraying against directory accounts |
+| LDAP connections are closed after every sign-in attempt | Previously each attempt left a connection to the directory server open |
+| Redirect after sign-in is restricted to same-origin paths | Fixes an open redirect (`?redirect=//evil.example`) |
+| Security headers in the bundled Caddy, Caddy admin API disabled, `Server`/`X-Powered-By` removed | Clickjacking protection, `nosniff`, referrer policy, smaller attack surface |
+| [`deploy/`](deploy) compose for running behind a reverse proxy | No published ports, non-root user, `no-new-privileges`, custom CA for LDAPS |
 
-1. Download the `docker-compose.yml` file
-2. Run `docker compose up -d`
+## Requirements
 
-The website is now listening on `http://localhost:3000`.
+- Docker with the Compose plugin (`docker compose`). The first image build takes a few minutes.
+- For development only: Node.js 22 or newer (the image uses Node.js 24).
 
-> [!TIP]
-> Checkout [stonith404/Pocket ID](https://github.com/stonith404/pocket-id), a user-friendly OIDC provider that lets you easily log in to services like Pingvin Share X using Passkeys. Made by the original creator of Pingvin Share.
+## Quick start (build from source)
 
-### Beta Channel (Testing)
+```bash
+git clone https://github.com/dewillepl/pingvin-share-x.git
+```
 
-Pingvin Share X now has a beta, this is where all (non-time sensitive) bug fixes, features and other updates will go before reaching stable.
+```bash
+cd pingvin-share-x && docker compose -f docker-compose.local.yml up -d --build
+```
 
-To use the Beta channel:
-1. Update the container image tag in your `docker-compose.yml` to `:beta`:
-   ```yaml
-   image: smp46/pingvin-share-x:beta
-   # or ghcr.io/smp46/pingvin-share-x:beta
-   ```
-2. Pull the latest beta image and recreate the container:
-   ```bash
-   docker compose pull
-   docker compose up -d
-   ```
+Open `http://localhost:3001`. The **first account you register becomes the admin**. Data (SQLite database, uploads, logo) is stored in `./data`.
 
-> [!IMPORTANT]
-> If you encounter any bugs, regressions, or have any other feedback while running the beta version, please [open a GitHub Issue](https://github.com/smp46/pingvin-share-x/issues). Please ensure you specify the exact version (including the beta tag).
+This setup publishes the port directly and is meant for testing or a LAN. For anything reachable from the internet, use the reverse proxy setup below.
 
-### Alternative Deployments
+## Building the image manually
 
-Pingvin Share X can also be deployed through other platforms. For more information, see the [documentation](https://smp46.github.io/pingvin-share-x/setup/installation#alternative-deployments).
+```bash
+docker build -t pingvin-share-x:local .
+```
 
-## Documentation
+```bash
+docker run -d --name pingvin-share-x -p 3000:3000 -e PUID=$(id -u) -e PGID=$(id -g) -v "$PWD/data:/opt/app/backend/data" -v "$PWD/data/images:/opt/app/frontend/public/img" pingvin-share-x:local
+```
 
-For more installation options and advanced configurations, please refer to the [documentation](https://smp46.github.io/pingvin-share-x/).
+The container starts as root only to fix file ownership, then runs as `PUID:PGID`. Inside the container, the bundled Caddy listens on port `3000` and forwards requests to the frontend and to the backend (`/api`).
 
-## Sponsors
+## Running behind a reverse proxy (recommended for production)
 
-If you find Pingvin Share X useful and would like to support its ongoing development and maintenance please consider becoming a sponsor! 
+[`deploy/docker-compose.yml`](deploy/docker-compose.yml) builds the image from this repository and publishes **no ports**. Your reverse proxy (e.g. Nginx Proxy Manager, Traefik or nginx in Docker) reaches the container over a shared Docker network.
 
-I would like to host a demo instance online for people to try out Pingvin, your sponsorship would make this possible.
+```bash
+cd deploy && cp .env.example .env
+```
 
-As a token of appreciation, sponsors can have their profile or company logo displayed right here in this section.
+Fill in `.env`:
+- `DATA_DIR`: where the data lives
+- `PUID`/`PGID`: the owner of that directory
+- `PROXY_NETWORK`: the Docker network of your reverse proxy
+- optionally `NODE_EXTRA_CA_CERTS`, for LDAPS with a private CA (put the PEM file into `deploy/certs/`)
 
-### Our Awesome Sponsors
+```bash
+docker compose up -d --build
+```
 
-| <a href="https://github.com/sponsors/smp46"><img src="https://github.com/images/modules/logos_page/GitHub-Mark.png" width="60px;" alt=""/><br /><sub><b>Your Name Here</b></sub></a> |
-| :---: |
+Then point your reverse proxy to `http://pingvin-share-x:3000` and enable TLS and HSTS there.
 
-💖 Support the project via [GitHub Sponsors](https://github.com/sponsors/smp46)
+### `TRUST_PROXY`
 
-## Contributing
+| Value | Meaning |
+|---|---|
+| `false` (default) | Trusts no proxy. Every client is seen as the bundled Caddy (`127.0.0.1`). |
+| `2` | **Recommended behind one reverse proxy.** Trusts the bundled Caddy and your proxy, so the client IP is the one your proxy reported. |
+| `1` | Use with `CADDY_DISABLED=true` and one reverse proxy in front of the backend. |
+| `loopback, 172.16.0.0/12` | A list of trusted IPs/subnets, passed to Express as is. |
+| `true` | Trusts every hop. Clients can spoof their IP, so avoid it. |
 
-All contributions are welcome, including issues, feature suggestions, pull requests and *translations*.
+The container must only be reachable through the reverse proxy, otherwise clients can still send their own `X-Forwarded-For`.
 
-### Translations
+### Recommended settings after the first login
 
-This project supports 34 languages so far, an LLM is used to add most translations, 
-but you can help correct these or add more at [CrowdIn](https://crowdin.com/project/pingvin-share-x).
+In **Administration → Configuration**:
+- turn off `allowRegistration`, unless you want public sign-ups
+- turn on `secureCookies` when serving over HTTPS
+- set `appUrl` to your public URL
+- shorten `sessionDuration`
+- for LDAP, use `ldaps://` and restrict `searchQuery` to the users allowed to sign in
 
-### AI Usage Policy
+### Migrating from the original Pingvin Share
 
-Anyone submitting code to this repo needs to read and comply with the project's [AI Usage Policy](https://github.com/smp46/pingvin-share-x/blob/main/AI_USAGE_POLICY.md). AI-generated code is welcome, but you need to understand it and explain it in your own words. Please respect the time of maintainers, submissions that do not comply will be closed.
+The database schema of the original Pingvin Share (1.x) is upgraded automatically on the first start, and the data paths are the same. Stop the old container and back up its data directory. Then start this one on the same data directory (mounted at `/opt/app/backend/data`, with `images/` mounted at `/opt/app/frontend/public/img`). Migrations can't be rolled back, so keep the backup until you are sure everything works.
 
-### Getting started
+## Configuration
 
-If you have found a bug, have a suggestion or something else, please open an issue.
+Most settings live in the admin panel. Alternatively, you can mount a `config.yaml` (see [config.example.yaml](config.example.yaml)), which locks the settings in the UI. Docker environment variables:
 
-### Submit a Pull Request
+| Variable | Default | Description |
+|---|---|---|
+| `TRUST_PROXY` | `false` | See above |
+| `PUID` / `PGID` | `1000` | User/group the app runs as and that owns the data |
+| `CADDY_DISABLED` | `false` | Skips the bundled Caddy (you must then route `/api` to the backend yourself) |
+| `NODE_EXTRA_CA_CERTS` | – | Extra CA certificates (PEM), e.g. for LDAPS with a private CA |
 
-Before you submit the pull request for review please ensure that
+All other options are described in the upstream documentation: <https://smp46.github.io/pingvin-share-x/>.
 
-- The pull request naming follows the [Conventional Commits specification](https://www.conventionalcommits.org):
+## Updating
 
-  `<type>[optional scope]: <description>`
+Back up the data directory first. Database migrations run automatically on start and can't be rolled back.
 
-  example:
+```bash
+git pull && docker compose -f docker-compose.local.yml up -d --build
+```
 
-  ```
-  feat(share): add password protection
-  ```
+When using the reverse proxy setup, run `docker compose up -d --build` in `deploy/` instead.
 
-  When `TYPE` can be:
-  - **feat** - is a new feature
-  - **doc** - documentation only changes
-  - **fix** - a bug fix
-  - **refactor** - code change that neither fixes a bug nor adds a feature
+## Development
 
-- Your pull request has a detailed description, written by you
-- You run `npm run format` to format the code
+Backend (NestJS, port 8080):
 
-### Setup project
+```bash
+cd backend && npm install && npx prisma db push && npx prisma db seed && npm run dev
+```
 
-#### Backend
+Frontend (Next.js, port 3000, proxies `/api` to the backend):
 
-1. Open the `backend` folder
-2. Install the dependencies with `npm install`
-3. Push the database schema to the database by running `npx prisma db push`
-4. Seed the database with `npx prisma db seed`
-5. Start the backend with `npm run dev`
+```bash
+cd frontend && npm install && npm run dev
+```
 
-#### Frontend
+Before committing, run `npm run format` and `npm run lint` in the repository root. Backend system tests: `npm run test:system` in `backend/`.
 
-1. Start the backend first
-2. Open the `frontend` folder
-3. Install the dependencies with `npm install`
-4. Start the frontend with `npm run dev`
+### Keeping in sync with upstream
 
-You're all set!
+```bash
+git remote add upstream https://github.com/smp46/pingvin-share-x.git
+```
 
-#### Testing
+```bash
+git fetch upstream && git merge upstream/main
+```
 
-At the moment we only have system tests for the backend. To run these tests, run `npm run test:system` in the backend folder.
+## Security
+
+Please don't report vulnerabilities in public issues.
+- For problems in the changes made by this fork, use **Security → Report a vulnerability** in this repository.
+- Anything that also affects upstream should be reported to the upstream maintainer as described in [SECURITY.md](SECURITY.md).
+
+## Credits and license
+
+Pingvin Share was created by [Elias Schneider (stonith404)](https://github.com/stonith404/pingvin-share). Pingvin Share X is maintained by [smp46](https://github.com/smp46/pingvin-share-x). Translations come from [Crowdin](https://crowdin.com/project/pingvin-share-x). If you find the project useful, consider [sponsoring the upstream maintainer](https://github.com/sponsors/smp46).
+
+Licensed under the [BSD 2-Clause License](LICENSE).
