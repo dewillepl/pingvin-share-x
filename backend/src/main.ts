@@ -30,6 +30,22 @@ function generateNestJsLogLevels(): LogLevel[] {
   }
 }
 
+/**
+ * Parses TRUST_PROXY into an Express "trust proxy" value.
+ * - "false" / unset: trust nothing
+ * - "true": trust every hop (X-Forwarded-For is fully client controlled!)
+ * - a number: trust that many hops in front of the backend, e.g. "2" for
+ *   the bundled Caddy plus one external reverse proxy
+ * - anything else: passed as is, e.g. "loopback, 172.16.0.0/12"
+ */
+function parseTrustProxy(value?: string): boolean | number | string {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === "false") return false;
+  if (trimmed === "true") return true;
+  if (/^\d+$/.test(trimmed)) return parseInt(trimmed, 10);
+  return trimmed;
+}
+
 async function bootstrap() {
   const logLevels = generateNestJsLogLevels();
   Logger.log(`Showing ${logLevels.join(", ")} messages`);
@@ -53,7 +69,7 @@ async function bootstrap() {
   });
 
   app.use(cookieParser());
-  app.set("trust proxy", process.env.TRUST_PROXY === "true");
+  app.set("trust proxy", parseTrustProxy(process.env.TRUST_PROXY));
 
   await fs.promises.mkdir(`${DATA_DIRECTORY}/uploads/_temp`, {
     recursive: true,
