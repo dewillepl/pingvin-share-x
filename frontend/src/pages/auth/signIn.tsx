@@ -6,10 +6,11 @@ import SignInForm from "../../components/auth/SignInForm";
 import Meta from "../../components/Meta";
 import useUser from "../../hooks/user.hook";
 import useTranslate from "../../hooks/useTranslate.hook";
+import { getQueryString, safeRedirectPath } from "../../utils/router.util";
 
 export function getServerSideProps(context: GetServerSidePropsContext) {
   return {
-    props: { redirectPath: context.query.redirect ?? null },
+    props: { redirectPath: getQueryString(context.query.redirect) ?? null },
   };
 }
 
@@ -25,7 +26,7 @@ const SignIn = ({ redirectPath }: { redirectPath?: string }) => {
   useEffect(() => {
     refreshUser().then((user) => {
       if (user) {
-        router.replace(redirectPath ?? "/upload");
+        router.replace(safeRedirectPath(redirectPath ?? "/upload"));
       } else {
         setIsLoading(false);
       }
